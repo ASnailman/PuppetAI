@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+puppet_env/
+*.idea
+.DS_Store
