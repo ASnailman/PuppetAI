@@ -5,3 +5,7 @@ import mediapipe as mp
 class HandPositions:
     def __init__(self):
         return
+    
+    # def isHandclosed():
+
+    
