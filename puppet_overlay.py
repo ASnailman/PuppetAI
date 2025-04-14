@@ -1,8 +1,11 @@
 import cv2 as cv
 import pyautogui
 import mediapipe as mp
+import tkinter as tk
+import threading
+from puppet_functions.point_overlay import PointOverlay
 
-def hand_tracking():
+def hand_tracking(overlay, screen_width, screen_height):
     # initialize mediapipe solutions
     mp_drawing = mp.solutions.drawing_utils # Initialize MediaPipe Drawing module (for debugging - draw hand landmarks)
     mp_drawing_styles = mp.solutions.drawing_styles
@@ -14,7 +17,6 @@ def hand_tracking():
     prev_y = 0
     tolerance = 0.02
     difference = 0.0
-    screen_width, screen_height = pyautogui.size() # get screen size
 
     try:
         while True:
@@ -40,33 +42,43 @@ def hand_tracking():
                 for hand_landmarks in results.multi_hand_landmarks:
                     mp_drawing.draw_landmarks(frame,hand_landmarks,mp_hands.HAND_CONNECTIONS,mp_drawing_styles.get_default_hand_landmarks_style(),mp_drawing_styles.get_default_hand_connections_style())
                     pointer = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-                    middle = hand_landmarks.landmark[mp_hands.HandLandmark.MidDLE_FINGER_TIP]
-
-                    # move mouse with pointer
-                    pyautogui.moveTo(int(pointer.x * screen_width), int(pointer.y * screen_height))
+                    pointer_y = pointer.y
                     
-                    # scroll with pointer and middle
                     if abs(difference) > tolerance:
-                        if pointer.y > prev_y:
+                        # if prev_y is not None:
+                        if pointer_y > prev_y:
                             scroll_amt = int(250 * difference)
                             pyautogui.scroll(scroll_amt)
-                        elif pointer.y < prev_y:
+                        elif pointer_y < prev_y:
                             scroll_amt = int(250 * difference)
                             pyautogui.scroll(scroll_amt)
-                    if pointer.y < 0.55 and pointer.y > 0.45:
-                        prev_y = pointer.y
-                    difference = float(pointer.y - prev_y)
+                    if pointer_y < 0.55 and pointer_y > 0.45:
+                        prev_y = pointer_y
+                    difference = float(pointer_y - prev_y)
+                    
+                    fingertip_x = int(pointer.x * screen_width)
+                    fingertip_y = int(pointer.y * screen_height)
+
+                    overlay.root.after(0, overlay.update_dot, fingertip_x, fingertip_y)
                                 
             cv.imshow('Live Feed', frame) # display frame
 
             if cv.waitKey(1) & 0xFF == ord('q'): # exit when q key is pressed
+                overlay.root.destroy()
                 break
     finally:
         cap.release() # release camera
         cv.destroyAllWindows() # Close all OpenCV windows
 
 def main():
-    hand_tracking()
+    screen_width, screen_height = pyautogui.size() # get screen size
+
+    overlay = PointOverlay() # initialize overlay window
+
+    thread = threading.Thread(target=hand_tracking, args=(overlay, screen_width, screen_height), daemon=True) # avoid running hand tracking in main thread, daemon ensures thread stops when main program exits
+    thread.start()
+
+    overlay.run()
 
 if __name__ == "__main__":
     main()
