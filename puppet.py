@@ -2,6 +2,7 @@ import cv2 as cv
 import pyautogui
 import mediapipe as mp
 
+clicked = False
 def hand_tracking():
     # initialize mediapipe solutions
     mp_drawing = mp.solutions.drawing_utils # Initialize MediaPipe Drawing module (for debugging - draw hand landmarks)
@@ -15,6 +16,7 @@ def hand_tracking():
     tolerance = 0.02
     difference = 0.0
     screen_width, screen_height = pyautogui.size() # get screen size
+    global clicked
 
     try:
         while True:
@@ -35,13 +37,16 @@ def hand_tracking():
             results = hands.process(frame)
             rgb_frame.flags.writeable = True
 
-            # scroll functionality
+            # scrolql functionality
             if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
+                for hand_index, hand_landmarks in enumerate(results.multi_hand_landmarks):
                     mp_drawing.draw_landmarks(frame,hand_landmarks,mp_hands.HAND_CONNECTIONS,mp_drawing_styles.get_default_hand_landmarks_style(),mp_drawing_styles.get_default_hand_connections_style())
+                    # handedness = results.multi_handedness[hand_index].classification[0].label
+                    # hand landmarks
                     thumb = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
                     thumb_knuckle = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_CMC]
                     pointer = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
+                    pointer_pip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP]
                     pointer_knuckle = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_MCP]
                     middle = hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP]
                     middle_knuckle = hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_MCP]
@@ -74,7 +79,18 @@ def hand_tracking():
                         if pointer.y and middle.y < 0.55 and pointer.y and middle.y > 0.45:
                             prev_y = pointer.y
                         difference = float(pointer.y - prev_y)
-                                
+                    
+                    #tapping
+                    if (pointer_knuckle.y > pointer.y and 
+                        middle_knuckle.y < middle.y and 
+                        thumb.x < thumb_knuckle.x - 0.12 and 
+                        ring_knuckle.y < ring.y and
+                        pinkie_knuckle.y < pinkie.y):
+                        if clicked == False:
+                            pyautogui.click(int(pointer.x * screen_width), int(pointer.y * screen_height))
+                            clicked = True
+                    if thumb.x > thumb_knuckle.x and clicked == True:
+                        clicked = False
             cv.imshow('Live Feed', frame) # display frame
 
             if cv.waitKey(1) & 0xFF == ord('q'): # exit when q key is pressed
