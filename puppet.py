@@ -91,6 +91,22 @@ def hand_tracking():
                             clicked = True
                     if thumb.x > thumb_knuckle.x and clicked == True:
                         clicked = False
+
+                    #zoom in
+                    if (ring_knuckle.y < ring.y and
+                        pinkie_knuckle.y < pinkie.y):
+                        if (abs(pointer.y - thumb.y) < 0.04):
+                            pyautogui.keyDown('ctrlleft')
+                            pyautogui.scroll(70)
+                            pyautogui.keyUp('ctrlleft')
+                            # pyautogui.hotkey('ctrl', '+')
+                        
+                        if (abs(middle.y - thumb.y) < 0.04):
+                            pyautogui.keyDown('ctrlleft')
+                            pyautogui.scroll(-70)
+                            pyautogui.keyUp('ctrlleft')
+                            # pyautogui.hotkey('ctrl', '-')
+                    
             cv.imshow('Live Feed', frame) # display frame
 
             if cv.waitKey(1) & 0xFF == ord('q'): # exit when q key is pressed
