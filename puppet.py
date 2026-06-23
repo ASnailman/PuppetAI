@@ -93,19 +93,19 @@ def hand_tracking():
                         clicked = False
 
                     #zoom in
-                    if (ring_knuckle.y < ring.y and
-                        pinkie_knuckle.y < pinkie.y):
-                        if (abs(pointer.y - thumb.y) < 0.04):
-                            pyautogui.keyDown('ctrlleft')
-                            pyautogui.scroll(70)
-                            pyautogui.keyUp('ctrlleft')
-                            # pyautogui.hotkey('ctrl', '+')
+                    # if (ring_knuckle.y < ring.y and
+                    #     pinkie_knuckle.y < pinkie.y):
+                    #     if (abs(pointer.y - thumb.y) < 0.04):
+                    #         pyautogui.keyDown('ctrlleft')
+                    #         pyautogui.scroll(70)
+                    #         pyautogui.keyUp('ctrlleft')
+                    #         # pyautogui.hotkey('ctrl', '+')
                         
-                        if (abs(middle.y - thumb.y) < 0.04):
-                            pyautogui.keyDown('ctrlleft')
-                            pyautogui.scroll(-70)
-                            pyautogui.keyUp('ctrlleft')
-                            # pyautogui.hotkey('ctrl', '-')
+                    #     if (abs(middle.y - thumb.y) < 0.04):
+                    #         pyautogui.keyDown('ctrlleft')
+                    #         pyautogui.scroll(-70)
+                    #         pyautogui.keyUp('ctrlleft')
+                    #         # pyautogui.hotkey('ctrl', '-')
                     
             cv.imshow('Live Feed', frame) # display frame
 
