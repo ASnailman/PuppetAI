@@ -1,0 +1,11 @@
+{
+  "scroll_multiplier": 250,
+  "scroll_tolerance": 0.02,
+  "gesture_stability_frames": 4,
+  "double_click_window_ms": 400,
+  "show_debug_feed": true,
+  "overlay_dot_radius": 7.5,
+  "zoom_in_hotkey": ["ctrl", "="],
+  "zoom_out_hotkey": ["ctrl", "-"],
+  "pinch_threshold": 0.07
+}
