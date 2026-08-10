@@ -1,11 +1,40 @@
 {
-  "scroll_multiplier": 250,
-  "scroll_tolerance": 0.02,
-  "gesture_stability_frames": 4,
-  "double_click_window_ms": 400,
-  "show_debug_feed": true,
-  "overlay_dot_radius": 7.5,
-  "zoom_in_hotkey": ["ctrl", "="],
-  "zoom_out_hotkey": ["ctrl", "-"],
-  "pinch_threshold": 0.07
+  "camera_index": 0,
+  "camera_width": 640,
+  "camera_height": 480,
+  "detection_confidence": 0.6,
+  "tracking_confidence": 0.6,
+
+  "active_region": [0.15, 0.15, 0.85, 0.85],
+  "one_euro_min_cutoff": 1.2,
+  "one_euro_beta": 0.02,
+  "cursor_source": "virtual",
+  "cursor_offset_palms": 1.0,
+
+  "finger_ext_on": 0.25,
+  "finger_ext_off": 0.10,
+  "thumb_out_on": 1.25,
+  "thumb_out_off": 1.10,
+  "pinch_on": 0.45,
+  "pinch_off": 0.65,
+  "pinch_reach_on": 1.15,
+  "pinch_reach_off": 1.02,
+  "scale_smoothing": 0.3,
+  "gesture_dwell_ms": 80,
+
+  "drag_slop_palm": 0.12,
+  "hand_lost_grace_ms": 250,
+  "click_press_delay_ms": 25,
+  "pinch_damp_start": 0.80,
+  "click_settle_ms": 150,
+
+  "scroll_deadzone": 0.15,
+  "scroll_gain": 900.0,
+  "zoom_deadzone": 0.25,
+  "zoom_gain": 90.0,
+
+  "show_debug_feed": false,
+  "overlay_dot_radius": 9.0,
+  "show_overlay": true,
+  "show_diagnostics": false
 }

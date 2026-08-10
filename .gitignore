@@ -4,3 +4,4 @@ __pycache__/
 puppet_env/
 *.idea
 .DS_Store
+.CLAUDE.md

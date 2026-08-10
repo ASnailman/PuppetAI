@@ -1,155 +1,132 @@
-# PuppetAI — Architecture & Expansion Roadmap
+# PuppetAI — Architecture Notes
 
-## What This App Does
+Local, offline gesture control: webcam → MediaPipe hand landmarks → mouse and
+keyboard input. No cloud, no LLM. User-facing docs are in `README.md`; this
+file is the map of the internals.
 
-PuppetAI is a local gesture-based computer control system. It uses Google's MediaPipe hand model to detect hand landmarks from a webcam and translates them into mouse/keyboard actions (cursor move, scroll, click, etc.). All processing runs locally — no cloud or LLM calls.
-
----
-
-## Current File Structure
+## Layout
 
 ```
 PuppetAI/
-├── puppet_overlay.py           # Main entry point (active version)
-├── puppet.py                   # Legacy standalone version (reference only)
-├── requirements.txt
+├── puppet_overlay.py           # entry point — threading and wiring only
+├── config.json                 # all tunables, hot-reloaded while running
+├── requirements.txt            # direct deps only
 └── puppet_functions/
-    ├── point_overlay.py        # Transparent Tkinter overlay window
-    ├── hand_positions.py       # GestureRecognizer stub (unimplemented)
-    └── __pycache__/
+    ├── camera.py               # threaded capture, always the newest frame
+    ├── filters.py              # OneEuroFilter, Hysteresis, EMA
+    ├── hand_model.py           # landmarks → scale/rotation-invariant features
+    ├── gesture_recognizer.py   # features → posture + pinch state
+    ├── pointer_mapper.py       # fingertip → screen pixel
+    ├── gesture_actions.py      # gestures → pyautogui calls
+    ├── config_manager.py       # defaults, validation, hot reload
+    └── point_overlay.py        # transparent Tk overlay + HUD
 ```
 
-**Run the app:** `python puppet_overlay.py` (from activated `puppet_env`)
+Run: `python puppet_overlay.py`   Test: `python -m pytest tests -q`
 
----
-
-## Known Bugs (Fix Before Adding Features)
-
-1. `hands.process(frame)` passes BGR frame — should be `rgb_frame` (MediaPipe expects RGB)
-2. `puppet_overlay.py` is missing cursor move and left click — they exist in `puppet.py` but were lost during the overlay refactor
-3. Scroll condition `pointer.y and middle.y > prev_y` is a Python precedence bug — `and` is boolean here, not element-wise
-
----
-
-## Target File Structure (After Expansion)
+## Data flow
 
 ```
-PuppetAI/
-├── puppet_overlay.py           # Main entry point (refactored)
-├── puppet.py                   # Retired — keep as backup
-├── config.json                 # User-editable settings
-├── requirements.txt            # Add pystray
-└── puppet_functions/
-    ├── point_overlay.py        # Updated: mode label, dot color per gesture
-    ├── hand_positions.py       # IMPLEMENT: GestureRecognizer class
-    ├── gesture_actions.py      # New: maps gesture names → system actions
-    └── config_manager.py       # New: load/save config.json
+Camera.read() → cv.flip → MediaPipe Hands
+  → HandModel.update(landmarks)   -> HandFrame  (booleans + palm-normalised distances)
+  → GestureRecognizer.update()    -> GestureState (posture, index_pinch, middle_pinch)
+  → GestureActions.execute()      -> pyautogui, via PointerMapper for coordinates
+  → PointOverlay.update_state()   -> HUD (marshalled onto the Tk thread)
 ```
 
----
+Tk owns the main thread; the vision pipeline runs on a daemon worker
+(`Pipeline.run`). The overlay's public methods are the thread boundary — they
+all go through `root.after`.
 
-## Implementation Phases
+## The two invariants everything rests on
 
-### Phase 1 — Bug Fixes & Consolidation (`puppet_overlay.py`)
-- Pass `rgb_frame` to `hands.process()`
-- Fix scroll comparison bug
-- Restore cursor move gesture from `puppet.py`
-- Restore left click gesture from `puppet.py` (with `clicked` flag debounce)
-- Make OpenCV debug window optional via config
+1. **Palm-relative measurement.** Every distance is divided by
+   `dist(wrist, middle_mcp)`. Thresholds are therefore in palm-lengths and hold
+   at any camera distance. Never introduce a threshold in raw normalised image
+   units — that was the original design's central flaw.
 
-### Phase 2 — Gesture State Machine (`hand_positions.py`)
+2. **Rotation-invariant extension.** A finger is extended when
+   `dist(tip, wrist) - dist(pip, wrist)` exceeds a threshold. Never compare
+   `tip.y < mcp.y`; that only works with the hand held upright.
 
-Implement `GestureRecognizer` to replace raw coordinate comparisons in the main loop.
+3. **The cursor is anchored to the palm, not the fingertip.**
+   `HandModel._cursor_point` projects a point one palm-length out from the
+   index MCP along the wrist→MCP axis. The index tip is the *worst* possible
+   cursor source, because pinching necessarily moves it — measured at ~32 px
+   of drift per click. Finger articulation must never move the cursor.
 
-```python
-class GestureRecognizer:
-    def classify(self, landmarks) -> str: ...
-    def get_stable_gesture(self, landmarks) -> str: ...
-        # Requires N consecutive matching frames before emitting
-```
+Corollaries worth preserving:
+- Ring and pinky are ignored during `MOVE`. They move involuntarily.
+- Pinches are gated on **reach** (fingertip-to-wrist distance), never on
+  extension. Some gate is needed because a fist's thumb rests on the curled
+  index finger and reads as a pinch — but extension is the wrong one: pinching
+  *is* bending the finger, so past ~60° of PIP flexion an extension test goes
+  false at the exact moment the user wants to click.
+- Any threshold on the *degree* of a pinch must clear the hardest pinch a user
+  can make with real margin. `pinch_reach_on` was once 1.35, which sits between
+  a firm pinch (1.44) and a very firm one (1.29) — so pinching harder, the
+  natural response to a click not registering, made it fire *less* often.
+  `test_the_pinch_gate_has_margin_at_both_ends` guards this.
+- Postures are debounced by a time-windowed majority vote; pinches are not
+  (they rely on hysteresis). Putting clicks behind the posture vote is what
+  made clicking feel late.
 
-**Gesture dictionary (E=extended, B=bent):**
+## Gesture set
 
-| Gesture        | Index | Middle | Ring | Pinky | Thumb               |
-|----------------|-------|--------|------|-------|---------------------|
-| `MOVE`         | E     | B      | B    | B     | out (x > CMC)       |
-| `SCROLL`       | E     | E      | B    | B     | out                 |
-| `LEFT_CLICK`   | E     | B      | B    | B     | in (< CMC - 0.12)   |
-| `RIGHT_CLICK`  | B     | B      | B    | E     | out                 |
-| `DOUBLE_CLICK` | E     | B      | B    | B     | in (2× fast)        |
-| `DRAG`         | E     | B      | B    | B     | pinch to index tip  |
-| `ZOOM_IN`      | E     | B      | B    | B     | thumb above index   |
-| `ZOOM_OUT`     | E     | E      | B    | B     | thumb close to mid  |
-| `NEUTRAL`      | B     | B      | B    | B     | any (fist)          |
+| Posture | Condition | Action |
+|---|---|---|
+| `MOVE` | index extended | cursor follows the index tip |
+| `SCROLL` | index + middle extended, thumb tucked | offset from anchor → scroll speed |
+| `ZOOM` | index + middle extended, thumb splayed | same, with Ctrl held |
+| `NEUTRAL` | fist or open palm | nothing |
 
-**Debounce:** Keep rolling buffer of last N frames (default 4). Only emit when all N agree. Prevents flicker.
+Pinch modifiers, tracked independently of posture: thumb↔index = click / drag,
+thumb↔middle = right click.
 
-**Double-click:** Track timestamp of last `LEFT_CLICK`; if another fires within 400ms, emit `DOUBLE_CLICK`.
+Clicking is a plain press/release pair: `mouseDown` the moment the pinch is
+detected, `mouseUp` when it opens. There is no click-vs-drag classification and
+no hold timer — a drag is just a press that moved, and once the hand travels
+past `drag_slop_palm` the cursor is unfrozen to follow it. Do not reintroduce
+"fire `click()` on release": it made every click depend on detecting a release
+within a time limit, so a long hold became a drag and a dropped frame lost the
+click outright. Double-click is likewise not detected here — two presses inside
+the OS's own window already register as one.
 
-**Drag:** `DRAG` gesture → `mouseDown()`; any other gesture → `mouseUp()`.
+## Invariants to not break
 
-### Phase 3 — Gesture Actions (`gesture_actions.py`)
+- `GestureActions.release_all()` must be called on pause, on hand loss, and on
+  shutdown. It is idempotent. Without it a vanished hand leaves a mouse button
+  held down.
+- `PointerMapper.freeze()` during a click; `reset()` on re-acquisition, or the
+  cursor slings across the screen from the hand's last known position.
+- **`map()` must feed the 1-Euro filters on every frame, including frozen
+  ones**, and `unfreeze()` must rebase onto the next filtered sample. Returning
+  early while frozen left the filters stale, so the next sample arrived with a
+  dt spanning the whole freeze, the adaptive cutoff opened fully, and the
+  cursor teleported — 45 px after a click, 126 px starting a drag. That is what
+  "it clicks somewhere I didn't press" and "drag doesn't work" both were.
+  `test_unfreeze_does_not_teleport_when_the_hand_moved` guards it.
+- The continuity offset must be held (`hold_offset`) while a button is down, or
+  the cursor creeps toward absolute mid-drag and drops things off-target.
+- Three layers protect a click's aim, and all three are load-bearing: the
+  palm-anchored cursor point, `GestureActions._cursor_damping` fading the gain
+  to zero across the pinch approach, and the `click_settle_ms` window that
+  keeps the cursor pinned while the fingers spring back apart. Dragging is
+  exempt from damping or it would freeze solid.
+- `pyautogui.FAILSAFE = False` and `PAUSE = 0` are set in `main()`; the default
+  100 ms pause would cap the app at 10 actions per second. But `PAUSE` was also
+  silently providing a settle between moving the cursor and pressing the
+  button, which the original version depended on — `click_press_delay_ms`
+  replaces it explicitly, only on the press. Button events also carry their own
+  coordinates so a press can't land where a dropped moveTo left the cursor.
 
-```python
-class GestureActions:
-    def execute(self, gesture: str, landmarks): ...
-```
+## Tests
 
-- `MOVE` → `pyautogui.moveTo(x, y)`
-- `SCROLL` → `pyautogui.scroll(amount)` (y-delta × scroll_multiplier)
-- `LEFT_CLICK` → `pyautogui.click()`
-- `RIGHT_CLICK` → `pyautogui.rightClick()`
-- `DOUBLE_CLICK` → `pyautogui.doubleClick()`
-- `DRAG` → `mouseDown()` / `mouseUp()`
-- `ZOOM_IN` → `pyautogui.hotkey('ctrl', '=')`
-- `ZOOM_OUT` → `pyautogui.hotkey('ctrl', '-')`
+`tests/conftest.py` builds synthetic 21-landmark hands from a described pose
+(`make_hand`), and `FakeBackend` records what would have gone to pyautogui. No
+webcam or real input is involved, so the suite runs in well under a second.
 
-### Phase 4 — Config System (`config_manager.py` + `config.json`)
-
-```json
-{
-  "scroll_multiplier": 250,
-  "scroll_tolerance": 0.02,
-  "gesture_stability_frames": 4,
-  "double_click_window_ms": 400,
-  "show_debug_feed": false,
-  "overlay_dot_color": "red",
-  "overlay_dot_radius": 7.5,
-  "zoom_in_hotkey": ["ctrl", "="],
-  "zoom_out_hotkey": ["ctrl", "-"]
-}
-```
-
-`ConfigManager` loads at startup, provides typed attribute access, falls back to defaults if file missing.
-
-### Phase 5 — UX Improvements (`point_overlay.py`)
-
-1. **Mode label** — display active gesture name (e.g., "MOVE", "SCROLL") in a corner of the overlay
-2. **Dot color per mode** — MOVE=red, SCROLL=blue, CLICK=green flash
-3. **Gesture guide toggle** — press `G` to show/hide on-screen cheat sheet of all gestures
-4. **System tray icon** (via `pystray`):
-   - Pause/Resume gesture tracking
-   - Open config editor (Tkinter form)
-   - Quit
-
----
-
-## Dependencies
-
-**To add:** `pystray`
-
-**Already present, unused:** `sounddevice`, `PyGetWindow` — no plans to use these.
-
-**Pinned versions are in `requirements.txt`.**
-
----
-
-## Verification Checklist
-
-| Phase | Test |
-|-------|------|
-| 1 | Cursor follows index finger; left click fires; scroll works up/down |
-| 2 | Gestures are stable, no flicker; neutral fist stops all action |
-| 3 | Right-click, double-click, drag, zoom all fire correctly |
-| 4 | Edit `config.json`, restart, confirm values changed |
-| 5 | Mode label visible; tray icon shows with working menu |
+When changing gesture geometry, the tests that matter are
+`test_hand_model.py::test_same_pose_at_different_distances_reads_identically`
+and `::test_rotated_hand_reads_identically` — they encode the two invariants
+above.
