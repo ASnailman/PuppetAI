@@ -14,6 +14,8 @@ statue.
 
 ## Demo
 
+https://github.com/user-attachments/assets/378fe76a-160a-4194-aa83-58836fbff50c
+
 ## What you need
 
 - A webcam — any built-in laptop camera is fine
