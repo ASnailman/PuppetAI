@@ -113,6 +113,13 @@ the OS's own window already register as one.
   to zero across the pinch approach, and the `click_settle_ms` window that
   keeps the cursor pinned while the fingers spring back apart. Dragging is
   exempt from damping or it would freeze solid.
+- The camera window is driven by `Pipeline.feed_visible`, not by
+  `config.show_debug_feed` directly: the config value is the default, and a
+  tray click or `C` overrides it until that value itself changes. Unrelated
+  config edits must leave the override alone — tuning thresholds with the feed
+  open is the whole point of having it. HighGUI is not thread-safe, so
+  `imshow`/`destroyAllWindows` stay on the vision thread; the tray callback
+  only flips a flag, exactly like `toggle_pause`.
 - `pyautogui.FAILSAFE = False` and `PAUSE = 0` are set in `main()`; the default
   100 ms pause would cap the app at 10 actions per second. But `PAUSE` was also
   silently providing a settle between moving the cursor and pressing the

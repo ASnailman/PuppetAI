@@ -38,6 +38,10 @@ except ImportError:
 # Re-read config.json at most this often; cheap, but no need to stat every frame.
 _CONFIG_POLL_S = 1.0
 
+# Title of the OpenCV camera window. Referenced in more than one place, so it
+# has to stay one string.
+_FEED_WINDOW = 'PuppetAI Camera'
+
 
 def _tray_icon_image():
     img = Image.new('RGB', (64, 64), 'black')
@@ -53,6 +57,12 @@ class Pipeline:
         self.overlay = overlay
         self.paused = False
         self.stop_event = threading.Event()
+
+        # None = follow config.show_debug_feed; True/False = the user asked for
+        # the camera window from the tray or the keyboard, which wins until the
+        # config value itself changes.
+        self._feed_override = None
+        self._feed_open = False
 
         self._screen = (screen_w, screen_h)
         self._build()
@@ -72,6 +82,23 @@ class Pipeline:
             # Never leave a button or modifier held when input stops.
             self.actions.release_all()
         return self.paused
+
+    @property
+    def feed_visible(self):
+        """Whether the camera window should be on screen right now."""
+        if self._feed_override is None:
+            return self.config.show_debug_feed
+        return self._feed_override
+
+    def toggle_feed(self):
+        """Show or hide the camera window with the landmarks drawn on it.
+
+        Safe to call from the tray thread: it only flips a flag, and the window
+        itself is created and destroyed on the vision thread, where OpenCV's
+        HighGUI wants to be driven from.
+        """
+        self._feed_override = not self.feed_visible
+        return self._feed_override
 
     def stop(self):
         self.stop_event.set()
@@ -163,17 +190,22 @@ class Pipeline:
                                               hand_present, self.paused,
                                               self._fps.value or 0.0)
 
-                if self.config.show_debug_feed:
+                if self.feed_visible and self._feed_open and not self._feed_alive():
+                    # Closed with its own X button — take that as "hide it",
+                    # or imshow would put it straight back up next frame.
+                    self._feed_override = False
+
+                if self.feed_visible:
                     if landmarks is not None:
                         mp_draw.draw_landmarks(
                             frame, landmarks, mp_hands.HAND_CONNECTIONS,
                             mp_styles.get_default_hand_landmarks_style(),
                             mp_styles.get_default_hand_connections_style())
-                    cv.imshow('PuppetAI — camera', frame)
+                    cv.imshow(_FEED_WINDOW, frame)
                     self._handle_keys()
                     self._feed_open = True
-                elif getattr(self, '_feed_open', False):
-                    # Debug feed was switched off via a config hot reload.
+                elif self._feed_open:
+                    # Switched off, from the tray or by a config hot reload.
                     cv.destroyAllWindows()
                     self._feed_open = False
         finally:
@@ -197,8 +229,21 @@ class Pipeline:
                 f'reach {hand.index_reach:4.2f} (need >{self.config.pinch_reach_on:.2f})   '
                 f'click {"DOWN" if state.index_pinch else "up"}')
 
+    def _feed_alive(self):
+        """False once the user has closed the camera window themselves.
+
+        A hidden window reports 0 and a destroyed one -1, so anything under 1
+        means it's gone. Only ever asked after a successful `imshow`, so a
+        headless build never gets here — but if the query fails anyway, say
+        yes and leave the old behaviour untouched.
+        """
+        try:
+            return cv.getWindowProperty(_FEED_WINDOW, cv.WND_PROP_VISIBLE) >= 1
+        except cv.error:
+            return True
+
     def _handle_keys(self):
-        """Keyboard shortcuts, read from the OpenCV debug window."""
+        """Keyboard shortcuts, read from the OpenCV camera window."""
         key = cv.waitKey(1) & 0xFF
         if key == ord('q'):
             self.stop_event.set()
@@ -206,14 +251,22 @@ class Pipeline:
             self.overlay.toggle_guide()
         elif key == ord('p'):
             self.toggle_pause()
+        elif key == ord('c'):
+            self.toggle_feed()
 
     def _poll_config(self, now):
         """Pick up edits to config.json without a restart."""
         if now - self._last_config_poll < _CONFIG_POLL_S:
             return
         self._last_config_poll = now
+        was_showing = self.config.show_debug_feed
         if self.config.maybe_reload():
             print("[config] reloaded")
+            # An edit to show_debug_feed is an explicit instruction, so let it
+            # take back control of the window; any other edit leaves whatever
+            # the user picked from the tray alone.
+            if self.config.show_debug_feed != was_showing:
+                self._feed_override = None
             self.actions.release_all()
             self._build()
 
@@ -243,6 +296,9 @@ def main():
         def on_guide(icon, item):
             overlay.toggle_guide()
 
+        def on_camera(icon, item):
+            pipeline.toggle_feed()
+
         def on_quit(icon, item):
             pipeline.stop()
             icon.stop()
@@ -250,6 +306,9 @@ def main():
         tray = pystray.Icon('PuppetAI', _tray_icon_image(), 'PuppetAI', pystray.Menu(
             pystray.MenuItem(lambda item: 'Resume' if pipeline.paused else 'Pause', on_pause),
             pystray.MenuItem('Show guide', on_guide),
+            pystray.MenuItem(
+                lambda item: 'Hide camera' if pipeline.feed_visible else 'Show camera',
+                on_camera),
             pystray.MenuItem('Quit', on_quit),
         ))
         tray.run_detached()

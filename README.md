@@ -40,7 +40,8 @@ Hold your hand up to the camera, palm toward the lens, and point with your
 index finger. A coloured dot shows where PuppetAI thinks you're pointing, with
 a status readout in the top-left corner.
 
-To stop: right-click the tray icon and choose Quit.
+Right-click the tray icon to pause, show the gesture guide, show the camera
+view with the hand landmarks drawn on it, or quit.
 
 ## Gestures
 
@@ -80,9 +81,11 @@ or a browser tab using it. If you have several cameras, set `camera_index` to
 `1`, `2`, ...
 
 **Nothing is detected** — the model needs reasonable light and your whole hand
-in frame. Set `"show_debug_feed": true` to watch what the camera sees, with the
-landmarks drawn on top. With that window focused, `G` shows the gesture guide,
-`P` pauses, and `Q` quits.
+in frame. Right-click the tray icon and choose **Show camera** to watch what
+the camera sees, with the landmarks drawn on top; choose it again, press `C`,
+or close the window to put it away. With that window focused, `G` shows the
+gesture guide, `P` pauses, and `Q` quits. Set `"show_debug_feed": true` in
+`config.json` to have it open on every start.
 
 **Clicks do nothing on one particular window** — Windows blocks synthetic input
 from reaching programs running as administrator unless the sender is elevated

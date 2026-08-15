@@ -36,7 +36,9 @@ _GUIDE = (
     "  ZOOM         same, but with the thumb out\n"
     "  REST         open your hand or make a fist\n"
     "  ─────────────────────────────────────\n"
-    "  G  hide this guide     Q  quit  (on the video window)\n"
+    "  Camera view: tray icon → Show camera\n"
+    "  G  hide this guide   C  camera   P  pause   Q  quit\n"
+    "  (keys work on the camera window)\n"
 )
 
 # Rendering tick. Faster than the camera on purpose: the dot is interpolated
