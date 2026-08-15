@@ -14,6 +14,10 @@ statue.
 
 ## Demo
 
+https://github.com/user-attachments/assets/378fe76a-160a-4194-aa83-58836fbff50c
+
+<img width="273" height="233" alt="image" src="https://github.com/user-attachments/assets/e4175102-c02e-49f3-80bf-f7f78cbf5197" />
+
 ## What you need
 
 - A webcam — any built-in laptop camera is fine
