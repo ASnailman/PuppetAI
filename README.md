@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/675619a7-f495-4742-9158-753c4ffa970e
+
 # PuppetAI
 
 Become a puppeteer. Dance, computer, dance!
@@ -14,7 +18,7 @@ statue.
 
 ## Demo
 
-https://github.com/user-attachments/assets/378fe76a-160a-4194-aa83-58836fbff50c
+https://github.com/user-attachments/assets/d4377659-6866-46e1-b889-b84cf203c6fc
 
 <img width="273" height="233" alt="image" src="https://github.com/user-attachments/assets/e4175102-c02e-49f3-80bf-f7f78cbf5197" />
 
