@@ -1,7 +1,3 @@
-
-
-https://github.com/user-attachments/assets/675619a7-f495-4742-9158-753c4ffa970e
-
 # PuppetAI
 
 Become a puppeteer. Dance, computer, dance!
